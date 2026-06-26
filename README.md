@@ -85,14 +85,23 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
+Beyond a basic to-do list, PawPal+ adds four scheduling behaviors. All logic
+lives in `pawpal_system.py` and is covered by `tests/test_pawpal.py`.
 
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_tasks()`, `Scheduler.sort_by_time()` | `sort_tasks` orders by priority (high first), then shortest duration to fit more tasks; `sort_by_time` orders chronologically by `fixed_time`, with flexible (no-time) tasks last. |
+| Filtering | `Pet.pending_tasks()`, `Owner.filter_tasks(pet_name=, completed=)` | Filter out completed tasks, or list tasks by pet name and/or completion status. |
+| Conflict handling | `ScheduledTask.overlaps()`, `Scheduler.find_conflicts()` | Half-open `[start, end)` interval test detects overlapping time slots for the same pet or across pets, and returns warning strings instead of crashing. |
+| Recurring tasks | `CareTask.next_occurrence()`, `Pet.complete_task()` | Completing a `DAILY`/`WEEKLY` task auto-creates the next instance using `timedelta` (today + 1 day / + 1 week); one-off tasks return `None`. |
+
+### How the daily plan is built (`Scheduler.build_plan()`)
+
+1. Drop completed tasks; keep what's pending.
+2. Place `fixed_time` tasks at their pinned slots first.
+3. Greedily fill the remaining `available_minutes` with the rest, ordered by
+   priority then shortest duration; anything that doesn't fit goes to `skipped`.
+4. Attach a plain-language `explanation` of what was scheduled and why.
 
 ## 📸 Demo Walkthrough
 

@@ -41,12 +41,22 @@ Yes. Reviewing the skeleton surfaced redundancies and ambiguities, so I tightene
 **a. Constraints and priorities**
 
 - What constraints does your scheduler consider (for example: time, priority, preferences)?
+
+Three: the owner's total available minutes (the time budget), each task's priority (high/medium/low), and fixed start times for tasks that must happen at a set time (e.g. meds at 8:00). It also tracks completion status so finished tasks aren't re-planned.
+
 - How did you decide which constraints mattered most?
+
+Time is the hard limit — nothing can be planned beyond the available minutes, so it gates everything. Within that budget, priority decides what gets cut first when time runs short, and fixed times are honored before flexible tasks so commitments aren't bumped.
 
 **b. Tradeoffs**
 
 - Describe one tradeoff your scheduler makes.
+
+It uses a greedy fill (highest priority first, shortest-duration to break ties) rather than searching for the mathematically optimal set of tasks.
+
 - Why is that tradeoff reasonable for this scenario?
+
+A daily pet routine has only a handful of tasks, and an owner cares more about "did the important things get done" than squeezing in the absolute maximum. Greedy is simple, fast, and easy to explain to the user — and the shortest-first tie-break still fits more tasks into leftover time.
 
 ---
 

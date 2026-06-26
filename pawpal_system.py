@@ -15,8 +15,8 @@ Design overview (three core user actions):
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, time
-from enum import IntEnum
+from datetime import date, time, timedelta
+from enum import Enum, IntEnum
 from typing import List, Optional
 
 
@@ -34,6 +34,14 @@ class Priority(IntEnum):
     HIGH = 3
 
 
+class Recurrence(Enum):
+    """How often a task repeats."""
+
+    NONE = "none"
+    DAILY = "daily"
+    WEEKLY = "weekly"
+
+
 @dataclass
 class CareTask:
     """A single thing the owner needs to do for the pet (walk, feeding, meds, ...).
@@ -47,12 +55,39 @@ class CareTask:
     priority: Priority = Priority.MEDIUM
     category: str = "general"
     fixed_time: Optional[time] = None
-    recurring: bool = False
+    recurrence: Recurrence = Recurrence.NONE
+    due_date: Optional[date] = None
     completed: bool = False
 
-    def mark_complete(self) -> None:
-        """Mark this task as done."""
+    def mark_complete(self) -> Optional["CareTask"]:
+        """Mark this task done; if it recurs, return a fresh instance for next time."""
         self.completed = True
+        return self.next_occurrence()
+
+    def next_occurrence(self) -> Optional["CareTask"]:
+        """Build the next instance of a recurring task.
+
+        Advances the due date by one step from this task's due_date (or today if
+        unset): timedelta(days=1) for DAILY, timedelta(weeks=1) for WEEKLY, which
+        handles month/year rollovers correctly.
+
+        Returns:
+            A fresh, uncompleted CareTask for the next date, or None if the task
+            does not recur (Recurrence.NONE).
+        """
+        if self.recurrence is Recurrence.NONE:
+            return None
+        step = timedelta(days=1) if self.recurrence is Recurrence.DAILY else timedelta(weeks=1)
+        base = self.due_date or date.today()
+        return CareTask(
+            title=self.title,
+            duration_minutes=self.duration_minutes,
+            priority=self.priority,
+            category=self.category,
+            fixed_time=self.fixed_time,
+            recurrence=self.recurrence,
+            due_date=base + step,
+        )
 
 
 @dataclass
@@ -74,6 +109,20 @@ class Pet:
         """Remove a care task from this pet by its title."""
         self.tasks = [t for t in self.tasks if t.title != title]
 
+    def pending_tasks(self) -> List[CareTask]:
+        """Return only this pet's tasks that are not yet completed."""
+        return [t for t in self.tasks if not t.completed]
+
+    def complete_task(self, title: str) -> Optional[CareTask]:
+        """Mark a task done; auto-add and return its next occurrence if it recurs."""
+        for task in self.tasks:
+            if task.title == title and not task.completed:
+                upcoming = task.mark_complete()
+                if upcoming is not None:
+                    self.tasks.append(upcoming)
+                return upcoming
+        return None
+
 
 @dataclass
 class Owner:
@@ -93,6 +142,20 @@ class Owner:
         """Register a pet under this owner."""
         self.pets.append(pet)
 
+    def filter_tasks(
+        self, pet_name: Optional[str] = None, completed: Optional[bool] = None
+    ) -> List[CareTask]:
+        """Return tasks across pets, optionally filtered by pet name and/or status."""
+        tasks: List[CareTask] = []
+        for pet in self.pets:
+            if pet_name is not None and pet.name != pet_name:
+                continue
+            for task in pet.tasks:
+                if completed is not None and task.completed != completed:
+                    continue
+                tasks.append(task)
+        return tasks
+
 
 @dataclass
 class ScheduledTask:
@@ -110,6 +173,15 @@ class ScheduledTask:
     def as_times(self) -> tuple[time, time]:
         """Return (start, end) as datetime.time for display."""
         return (_to_time(self.start_minute), _to_time(self.end_minute))
+
+    def overlaps(self, other: "ScheduledTask") -> bool:
+        """Return True if this task's time interval overlaps another's.
+
+        Uses the half-open interval test [start, end): two ranges overlap iff
+        each starts before the other ends. Tasks that merely touch (one ends
+        exactly when the next begins) do NOT count as overlapping.
+        """
+        return self.start_minute < other.end_minute and other.start_minute < self.end_minute
 
 
 @dataclass
@@ -187,9 +259,53 @@ class Scheduler:
         """Order tasks by priority (high first), then shortest duration first."""
         return sorted(tasks, key=lambda t: (-int(t.priority), t.duration_minutes))
 
+    def sort_by_time(self, tasks: List[CareTask]) -> List[CareTask]:
+        """Order tasks chronologically by fixed_time, with flexible tasks last.
+
+        Sorts on a tuple key (has-no-time?, the-time): False sorts before True,
+        so fixed-time tasks come first in clock order while flexible tasks
+        (fixed_time is None) fall to the end. The tuple avoids comparing None to
+        a time, which would raise TypeError.
+
+        Args:
+            tasks: The tasks to order (not mutated).
+
+        Returns:
+            A new list sorted by time of day.
+        """
+        return sorted(tasks, key=lambda t: (t.fixed_time is None, t.fixed_time or time.min))
+
     def fits(self, task: CareTask, remaining: int) -> bool:
         """Return True if the task fits in the remaining available minutes."""
         return 0 < task.duration_minutes <= remaining
+
+    def find_conflicts(self, plans: dict) -> List[str]:
+        """Return warning strings for overlapping scheduled tasks across plans.
+
+        Flattens every plan's scheduled tasks into one (label, task) list, then
+        does a lightweight pairwise O(n^2) scan comparing each pair with
+        ScheduledTask.overlaps. Catches both same-pet and cross-pet clashes.
+        Returns messages instead of raising, so callers keep running.
+
+        Args:
+            plans: Mapping of label (e.g. pet name) -> DailyPlan.
+
+        Returns:
+            A list of human-readable warning strings; empty if no conflicts.
+        """
+        entries = [(label, st) for label, plan in plans.items() for st in plan.scheduled]
+        warnings: List[str] = []
+        for i in range(len(entries)):
+            for j in range(i + 1, len(entries)):
+                (label_a, a), (label_b, b) = entries[i], entries[j]
+                if a.overlaps(b):
+                    start, _ = a.as_times()
+                    same = "same pet" if label_a == label_b else f"{label_a} vs {label_b}"
+                    warnings.append(
+                        f"WARNING: '{a.task.title}' ({label_a}) overlaps "
+                        f"'{b.task.title}' ({label_b}) around {start:%H:%M} [{same}]."
+                    )
+        return warnings
 
     def explain(self, plan: DailyPlan) -> str:
         """Compose the per-task reasons into a single plan-level explanation."""

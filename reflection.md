@@ -65,12 +65,30 @@ A daily pet routine has only a handful of tasks, and an owner cares more about "
 **a. How you used AI**
 
 - How did you use AI tools during this project (for example: design brainstorming, debugging, refactoring)?
+
+I used AI across every phase: brainstorming the UML, generating class skeletons, implementing scheduling logic, writing tests, and wiring the Streamlit UI. It was most useful for turning a clear design into boilerplate quickly and for explaining concepts like `timedelta` and lambda sort keys.
+
 - What kinds of prompts or questions were most helpful?
+
+Specific, scoped prompts ("sort tasks by time, handle the `None` case", "lightweight conflict detection that warns instead of crashing") worked far better than vague ones. Asking it to *review* my skeleton for missing relationships also surfaced real issues early.
+
+- Which AI coding assistant features were most effective for building your scheduler?
+
+Inline code generation from a described method, the ability to run my tests/`main.py` and read the output, and review/critique of existing code. Letting it run `pytest` and report failures made the implement-test loop fast.
+
+- How did using separate chat sessions for different phases help you stay organized?
+
+Treating each phase (design → skeleton → logic → tests → UI → docs) as its own focused thread kept the context scoped to one concern at a time, so suggestions stayed relevant and I could verify each phase before moving to the next instead of mixing everything together.
 
 **b. Judgment and verification**
 
 - Describe one moment where you did not accept an AI suggestion as-is.
+
+The initial design included a `CareTask.priority_weight()` method and stored times as `datetime.time`. I rejected the redundant `priority_weight()` (since `Priority` is already an `IntEnum` that sorts directly) and switched `ScheduledTask` to integer minutes to avoid fragile `time` arithmetic.
+
 - How did you evaluate or verify what the AI suggested?
+
+I ran `main.py` to see real output, ran `pytest` after each change, and read the diffs rather than trusting blindly — for example, I caught that `build_plan` wasn't actually filtering completed tasks even though the docs claimed it did, and fixed it with a new test.
 
 ---
 
@@ -79,12 +97,22 @@ A daily pet routine has only a handful of tasks, and an owner cares more about "
 **a. What you tested**
 
 - What behaviors did you test?
+
+Sorting (by priority and by time), the time-budget `fits()` check and skipping when out of time, fixed-time placement, filtering by pet/status, completed-task exclusion, daily/weekly recurrence regeneration, and conflict detection (same-pet and cross-pet), plus negative cases like spaced tasks producing no conflicts.
+
 - Why were these tests important?
+
+These are the core decisions the scheduler makes — if sorting, fitting, or conflict logic is wrong, the daily plan is wrong. The negative cases matter just as much, since they prove the logic doesn't over-flag conflicts or over-generate recurring tasks.
 
 **b. Confidence**
 
 - How confident are you that your scheduler works correctly?
+
+Fairly confident (about 4/5). All 27 tests pass and cover both positive and negative paths for every feature, and the live `main.py`/Streamlit output matches expectations.
+
 - What edge cases would you test next if you had more time?
+
+Month-end and leap-year recurrence, tasks scheduled past midnight, a shared (rather than per-pet) time budget across multiple pets, and the scheduler actively *resolving* conflicts rather than only reporting them.
 
 ---
 
@@ -94,10 +122,16 @@ A daily pet routine has only a handful of tasks, and an owner cares more about "
 
 - What part of this project are you most satisfied with?
 
+The clean separation between the logic layer (`pawpal_system.py`) and the UI (`app.py`), and the test suite. Because the design was tightened before implementation, adding features like recurrence and conflict detection was straightforward.
+
 **b. What you would improve**
 
 - If you had another iteration, what would you improve or redesign?
 
+I'd make the scheduler *resolve* conflicts (shift flexible tasks into free gaps) instead of only warning, and support a shared household time budget across multiple pets rather than per-pet minutes.
+
 **c. Key takeaway**
 
 - What is one important thing you learned about designing systems or working with AI on this project?
+
+As the "lead architect," my judgment is what keeps the system coherent — AI generates fast and confidently, but it will happily add redundant methods or let docs drift from code. My job was to own the design decisions, scope each request, and verify everything by running tests and reading the output. The AI is a powerful implementer; the architecture, tradeoffs, and final sign-off stay with me.

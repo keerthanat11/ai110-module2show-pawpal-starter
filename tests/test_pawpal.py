@@ -120,6 +120,18 @@ def test_build_plan_places_fixed_time_task_at_its_time():
     assert walk.start_minute == 7 * 60
 
 
+def test_build_plan_skips_completed_tasks():
+    owner = Owner(name="J", available_minutes=120)
+    pet = Pet(name="Mochi", species="dog")
+    pet.add_task(CareTask("Walk", 20, Priority.HIGH))
+    done = CareTask("Feed", 10, Priority.HIGH)
+    pet.add_task(done)
+    done.mark_complete()
+
+    plan = Scheduler(owner).build_plan(pet)
+    assert [s.task.title for s in plan.scheduled] == ["Walk"]
+
+
 def test_build_plan_empty_pet_produces_empty_plan():
     plan = Scheduler(Owner(name="J")).build_plan(Pet(name="Mochi", species="dog"))
     assert plan.scheduled == []

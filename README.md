@@ -22,6 +22,16 @@ Your final app should:
 - Display the plan clearly (and ideally explain the reasoning)
 - Include tests for the most important scheduling behaviors
 
+## ✨ Features
+
+- **Priority-aware daily planning** — `Scheduler.build_plan()` fits tasks into the owner's available minutes, placing fixed-time tasks first and greedily filling the rest by priority (high first), so the most important care happens even when time is tight.
+- **Sorting by time** — `Scheduler.sort_by_time()` returns tasks in chronological order (by `fixed_time`), with flexible/no-time tasks last; the generated plan is kept time-ordered.
+- **Priority + duration sorting** — `Scheduler.sort_tasks()` ranks by priority, breaking ties by shortest duration to squeeze more tasks into leftover time.
+- **Filtering by pet & status** — `Pet.pending_tasks()` and `Owner.filter_tasks(pet_name=, completed=)` let you view tasks for one pet and/or hide completed ones; completed tasks are automatically excluded from new plans.
+- **Conflict warnings** — `ScheduledTask.overlaps()` + `Scheduler.find_conflicts()` flag overlapping time slots (same pet *or* across pets) and return warning strings instead of crashing.
+- **Daily / weekly recurrence** — completing a recurring task (`Pet.complete_task()` → `CareTask.next_occurrence()`) auto-creates the next instance using `timedelta` (+1 day or +7 days); one-off tasks don't repeat.
+- **Plain-language explanations** — every plan includes a `summary()` and an `explanation` describing what was scheduled, what was skipped, and why.
+
 ## Getting started
 
 ### Setup
@@ -122,14 +132,45 @@ lives in `pawpal_system.py` and is covered by `tests/test_pawpal.py`.
    priority then shortest duration; anything that doesn't fit goes to `skipped`.
 4. Attach a plain-language `explanation` of what was scheduled and why.
 
-## 📸 Demo Walkthrough
+## Demo Walkthrough
 
-Describe your app in numbered steps so a reader can follow along without watching a video:
+### Main UI features (Streamlit app: `streamlit run app.py`)
 
-1. <!-- Describe this step -->
-2. <!-- Describe this step -->
-3. <!-- Describe this step -->
-4. <!-- Describe this step -->
-5. <!-- Add more steps as needed -->
+- **Owner & Pet panel** — enter the owner's name, the pet's name/species, and the total minutes available today. Owner and pet objects persist across reruns via `st.session_state`.
+- **Task entry** — add a task with a title, duration, and priority, plus an optional **fixed start time** and a **repeat** setting (none / daily / weekly).
+- **Current tasks** — a table that can be **filtered** to pending-only and is **sorted chronologically**; you can mark a task complete, which auto-adds the next occurrence for recurring tasks.
+- **Build Schedule** — generates the day's plan with summary metrics (scheduled / minutes used / skipped), a time-ordered table, a plain-language explanation, skipped-task warnings, and **conflict alerts**.
 
-**Screenshot or video** *(optional)*: <!-- Insert a screenshot or link to a demo video here -->
+### Example workflow
+
+1. **Add a pet** — set Owner = "Jordan", Pet = "Mochi" (dog), and available minutes = 90.
+2. **Schedule tasks** — add "Morning walk" (30 min, high), "Give meds" (5 min, high) with a fixed time of 08:00, and "Grooming" (40 min, low).
+3. **View today's schedule** — click **Generate schedule**: the fixed-time meds land at 08:00, the high-priority walk fills from the start of the day, and lower-priority grooming is skipped if it doesn't fit the 90 minutes.
+4. **Complete a recurring task** — mark a daily task done and watch its next-day occurrence appear automatically.
+
+### Key Scheduler behaviors shown
+
+- **Sorting** — fixed-time tasks placed at their slot; remaining tasks ordered by priority then duration; the plan table is chronological.
+- **Filtering** — completed tasks drop out of both the task list and new plans.
+- **Conflict warnings** — overlapping time slots (e.g. two pets both at 08:00) are reported, not crashed on.
+- **Recurrence** — daily/weekly tasks regenerate on completion.
+
+### Sample CLI output (`python main.py`)
+
+```
+============================================================
+TODAY'S SCHEDULES
+
+Mochi:
+  07:00-07:30  Morning walk (30 min)
+  08:00-08:15  Give meds (15 min)
+
+Biscuit:
+  07:00-07:10  Litter cleanup (10 min)
+  08:00-08:10  Feed breakfast (10 min)
+
+============================================================
+CONFLICT CHECK
+  WARNING: 'Morning walk' (Mochi) overlaps 'Litter cleanup' (Biscuit) around 07:00 [Mochi vs Biscuit].
+  WARNING: 'Give meds' (Mochi) overlaps 'Feed breakfast' (Biscuit) around 08:00 [Mochi vs Biscuit].
+```

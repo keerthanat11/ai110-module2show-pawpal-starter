@@ -1,6 +1,8 @@
+from datetime import time
+
 import streamlit as st
 
-from pawpal_system import CareTask, DailyPlan, Owner, Pet, Priority, ScheduledTask, Scheduler
+from pawpal_system import CareTask, Owner, Pet, Priority, Recurrence, Scheduler
 
 st.set_page_config(page_title="PawPal+", page_icon="🐾", layout="centered")
 
@@ -64,10 +66,13 @@ pet = st.session_state.pet
 pet.name = pet_name
 pet.species = species
 
-st.markdown("### Tasks")
-st.caption("Add tasks to your pet. These feed directly into the scheduler.")
+scheduler = Scheduler(owner)
 
 PRIORITY_MAP = {"low": Priority.LOW, "medium": Priority.MEDIUM, "high": Priority.HIGH}
+RECUR_MAP = {"none": Recurrence.NONE, "daily": Recurrence.DAILY, "weekly": Recurrence.WEEKLY}
+
+st.markdown("### Tasks")
+st.caption("Add tasks to your pet. These feed directly into the scheduler.")
 
 col1, col2, col3 = st.columns(3)
 with col1:
@@ -77,35 +82,71 @@ with col2:
 with col3:
     priority = st.selectbox("Priority", ["low", "medium", "high"], index=2)
 
-# Replace the placeholder dict-append with a real CareTask + Pet.add_task() call.
-if st.button("Add task"):
-    pet.add_task(CareTask(task_title, int(duration), PRIORITY_MAP[priority]))
+col4, col5 = st.columns(2)
+with col4:
+    has_time = st.checkbox("Fixed start time?")
+    fixed_time = st.time_input("Start time", value=time(8, 0)) if has_time else None
+with col5:
+    repeats = st.selectbox("Repeats", ["none", "daily", "weekly"])
 
-if pet.tasks:
-    st.write("Current tasks:")
+# Build a real CareTask and attach it via Pet.add_task().
+if st.button("Add task"):
+    pet.add_task(
+        CareTask(
+            task_title,
+            int(duration),
+            PRIORITY_MAP[priority],
+            fixed_time=fixed_time,
+            recurrence=RECUR_MAP[repeats],
+        )
+    )
+
+# --- Current tasks: filtered by status, sorted chronologically --------------
+show_pending = st.checkbox("Show only pending tasks")
+visible = pet.pending_tasks() if show_pending else pet.tasks  # Pet/Owner filtering
+
+if visible:
+    st.write("Current tasks (sorted by time):")
     st.table(
         [
             {
-                "title": t.title,
-                "duration_minutes": t.duration_minutes,
+                "when": f"{t.fixed_time:%H:%M}" if t.fixed_time else "flexible",
+                "task": t.title,
+                "min": t.duration_minutes,
                 "priority": t.priority.name.lower(),
+                "repeats": t.recurrence.value,
+                "status": "done" if t.completed else "todo",
             }
-            for t in pet.tasks
+            for t in scheduler.sort_by_time(visible)  # Scheduler.sort_by_time()
         ]
     )
+
+    # Completing a recurring task auto-adds its next occurrence.
+    done_title = st.selectbox("Mark a task complete", [t.title for t in pet.pending_tasks()] or ["—"])
+    if st.button("Complete task") and done_title != "—":
+        upcoming = pet.complete_task(done_title)
+        if upcoming is not None:
+            st.success(f"Completed '{done_title}'. Next occurrence added for {upcoming.due_date}.")
+        else:
+            st.success(f"Completed '{done_title}'.")
+        st.rerun()
 else:
-    st.info("No tasks yet. Add one above.")
+    st.info("No tasks to show. Add one above.")
 
 st.divider()
 
 st.subheader("Build Schedule")
 st.caption("Calls Scheduler.build_plan() on your pet's tasks.")
 
-# Replace the placeholder warning with a real call into the scheduling logic.
 if st.button("Generate schedule"):
-    scheduler = Scheduler(owner)
     plan = scheduler.build_plan(pet)
     st.markdown(f"#### Today's plan for {pet.name} ({pet.species})")
+
+    # Summary metrics for a professional, at-a-glance view.
+    m1, m2, m3 = st.columns(3)
+    m1.metric("Scheduled", len(plan.scheduled))
+    m2.metric("Minutes used", f"{plan.total_minutes} / {owner.available_minutes}")
+    m3.metric("Skipped", len(plan.skipped))
 
     if plan.scheduled:
         st.table(
@@ -118,7 +159,7 @@ if st.button("Generate schedule"):
                     "priority": s.task.priority.name.lower(),
                     "why": s.reason,
                 }
-                for s in sorted(plan.scheduled, key=lambda s: s.start_minute)
+                for s in plan.scheduled  # build_plan already returns these in time order
             ]
         )
     else:
@@ -133,5 +174,8 @@ if st.button("Generate schedule"):
         )
 
     # Lightweight conflict check: warn on overlapping time slots (don't crash).
-    for conflict in scheduler.find_conflicts({pet.name: plan}):
+    conflicts = scheduler.find_conflicts({pet.name: plan})
+    for conflict in conflicts:
         st.error(conflict)
+    if not conflicts and plan.scheduled:
+        st.caption("✅ No scheduling conflicts detected.")

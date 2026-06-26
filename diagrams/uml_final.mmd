@@ -1,0 +1,98 @@
+classDiagram
+    %% PawPal+ — FINAL design, synced with pawpal_system.py
+    %% Updated from diagrams/uml.mmd to reflect what was actually built:
+    %%   + Recurrence enum; CareTask.recurrence/due_date/completed + mark_complete/next_occurrence
+    %%   + Pet.pending_tasks/complete_task; Owner.filter_tasks (sleep_hour removed)
+    %%   + ScheduledTask int minutes + overlaps(); Scheduler.sort_by_time/find_conflicts
+    %%   - removed CareTask.priority_weight() (Priority IntEnum sorts directly)
+
+    class Priority {
+        <<enumeration>>
+        LOW
+        MEDIUM
+        HIGH
+    }
+
+    class Recurrence {
+        <<enumeration>>
+        NONE
+        DAILY
+        WEEKLY
+    }
+
+    class CareTask {
+        +str title
+        +int duration_minutes
+        +Priority priority
+        +str category
+        +Optional~time~ fixed_time
+        +Recurrence recurrence
+        +Optional~date~ due_date
+        +bool completed
+        +mark_complete() Optional~CareTask~
+        +next_occurrence() Optional~CareTask~
+    }
+
+    class Pet {
+        +str name
+        +str species
+        +str breed
+        +int age_years
+        +str notes
+        +list~CareTask~ tasks
+        +add_task(task CareTask) None
+        +remove_task(title str) None
+        +pending_tasks() list~CareTask~
+        +complete_task(title str) Optional~CareTask~
+    }
+
+    class Owner {
+        +str name
+        +int wake_hour
+        +int available_minutes
+        +list~str~ preferences
+        +list~Pet~ pets
+        +add_pet(pet Pet) None
+        +filter_tasks(pet_name str, completed bool) list~CareTask~
+    }
+
+    class ScheduledTask {
+        +CareTask task
+        +int start_minute
+        +int end_minute
+        +str reason
+        +as_times() tuple~time, time~
+        +overlaps(other ScheduledTask) bool
+    }
+
+    class DailyPlan {
+        +date day
+        +list~ScheduledTask~ scheduled
+        +list~CareTask~ skipped
+        +int total_minutes
+        +str explanation
+        +summary() str
+    }
+
+    class Scheduler {
+        +Owner owner
+        +int day_start_hour
+        +build_plan(pet Pet, day date) DailyPlan
+        +sort_tasks(tasks list~CareTask~) list~CareTask~
+        +sort_by_time(tasks list~CareTask~) list~CareTask~
+        +fits(task CareTask, remaining int) bool
+        +find_conflicts(plans dict) list~str~
+        +explain(plan DailyPlan) str
+    }
+
+    Owner "1" --> "*" Pet : owns
+    Pet "1" --> "*" CareTask : has
+    CareTask --> Priority : uses
+    CareTask --> Recurrence : repeats
+    CareTask ..> CareTask : regenerates (next_occurrence)
+    Scheduler --> Owner : reads constraints
+    Scheduler ..> CareTask : schedules
+    Scheduler ..> DailyPlan : produces
+    Scheduler ..> ScheduledTask : checks conflicts
+    DailyPlan "1" o-- "*" ScheduledTask : contains
+    ScheduledTask "1" --> "1" CareTask : wraps

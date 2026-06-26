@@ -224,8 +224,11 @@ class Scheduler:
         plan = DailyPlan(day=day or date.today())
         remaining = self.owner.available_minutes
 
+        # Only plan tasks that aren't already done.
+        pending = pet.pending_tasks()
+
         fixed = sorted(
-            (t for t in pet.tasks if t.fixed_time is not None),
+            (t for t in pending if t.fixed_time is not None),
             key=lambda t: t.fixed_time.hour * 60 + t.fixed_time.minute,
         )
         for task in fixed:
@@ -240,7 +243,7 @@ class Scheduler:
             remaining -= task.duration_minutes
 
         cursor = self.day_start_hour * 60
-        for task in self.sort_tasks([t for t in pet.tasks if t.fixed_time is None]):
+        for task in self.sort_tasks([t for t in pending if t.fixed_time is None]):
             if not self.fits(task, remaining):
                 plan.skipped.append(task)
                 continue
@@ -251,6 +254,7 @@ class Scheduler:
             cursor += task.duration_minutes
             remaining -= task.duration_minutes
 
+        plan.scheduled.sort(key=lambda s: s.start_minute)  # keep the plan chronological
         plan.total_minutes = sum(s.task.duration_minutes for s in plan.scheduled)
         plan.explanation = self.explain(plan)
         return plan

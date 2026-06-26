@@ -23,7 +23,16 @@ Relationships: an `Owner` owns many `Pet`s; a `Pet` has many `CareTask`s; the `S
 **b. Design changes**
 
 - Did your design change during implementation?
+
+Yes. Reviewing the skeleton surfaced redundancies and ambiguities, so I tightened the design before adding logic.
+
 - If yes, describe at least one change and why you made it.
+
+- Dropped `CareTask.priority_weight()` — `Priority` is an `IntEnum`, so tasks sort directly without a second ranking that could drift.
+- `build_plan(pet)` now reads `pet.tasks` instead of taking a separate `tasks` list, removing a duplicate source of truth.
+- Made `Owner.available_minutes` the single time budget (removed `sleep_hour`), so `fits()` can't disagree with a wake/sleep window.
+- `ScheduledTask` stores `start_minute`/`end_minute` as ints (minutes-from-midnight) instead of `time`, avoiding error-prone `datetime.time` math; `as_times()` formats for display.
+- Defined `sort_tasks` tie-breaking (priority high-first, then shortest-first) and made `build_plan` place `fixed_time` tasks before filling flexible ones, so timing conflicts are handled deliberately.
 
 ---
 

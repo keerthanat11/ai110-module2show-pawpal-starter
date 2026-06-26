@@ -1,0 +1,78 @@
+classDiagram
+    %% PawPal+ — pet care planning assistant
+    %% Domain model + scheduling logic. Keep in sync with the Python implementation.
+    %%
+    %% Three core user actions this design supports:
+    %%   1. Add a pet & its care tasks  -> Owner.add_pet, Pet.add_task/remove_task, CareTask
+    %%   2. Generate today's plan        -> Scheduler.build_plan (sort_tasks + fits) -> DailyPlan
+    %%   3. See today's tasks & why      -> DailyPlan.summary, ScheduledTask.reason, Scheduler.explain
+
+    class Priority {
+        <<enumeration>>
+        LOW
+        MEDIUM
+        HIGH
+    }
+
+    class Owner {
+        +str name
+        +int wake_hour
+        +int sleep_hour
+        +int available_minutes
+        +list~str~ preferences
+        +add_pet(pet Pet) None
+    }
+
+    class Pet {
+        +str name
+        +str species
+        +str breed
+        +int age_years
+        +str notes
+        +add_task(task CareTask) None
+        +remove_task(title str) None
+    }
+
+    class CareTask {
+        +str title
+        +int duration_minutes
+        +Priority priority
+        +str category
+        +Optional~time~ fixed_time
+        +bool recurring
+        +priority_weight() int
+    }
+
+    class ScheduledTask {
+        +CareTask task
+        +time start_time
+        +time end_time
+        +str reason
+    }
+
+    class DailyPlan {
+        +date day
+        +list~ScheduledTask~ scheduled
+        +list~CareTask~ skipped
+        +int total_minutes
+        +str explanation
+        +summary() str
+    }
+
+    class Scheduler {
+        +Owner owner
+        +int day_start_hour
+        +build_plan(pet Pet, tasks list~CareTask~) DailyPlan
+        +sort_tasks(tasks list~CareTask~) list~CareTask~
+        +fits(task CareTask, remaining int) bool
+        +explain(plan DailyPlan) str
+    }
+
+    Owner "1" --> "*" Pet : owns
+    Pet "1" --> "*" CareTask : has
+    CareTask --> Priority : uses
+    Scheduler --> Owner : reads constraints
+    Scheduler ..> CareTask : schedules
+    Scheduler ..> DailyPlan : produces
+    DailyPlan "1" o-- "*" ScheduledTask : contains
+    ScheduledTask "1" --> "1" CareTask : wraps

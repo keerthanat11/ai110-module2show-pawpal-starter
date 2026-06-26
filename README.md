@@ -69,19 +69,38 @@ Biscuit (cat):
 
 ## 🧪 Testing PawPal+
 
+Run the full test suite from the project root:
+
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python -m pytest
 ```
 
-Sample test output:
+**What the tests cover** (`tests/test_pawpal.py`, 26 tests):
+
+- **Model basics** — adding/removing tasks, registering pets, marking tasks complete.
+- **Scheduling** — priority + shortest-first sort order, the time-budget `fits()` check, skipping tasks when time runs out, and placing `fixed_time` tasks at their slot.
+- **Sorting** — `sort_by_time()` returns tasks in chronological order with flexible (no-time) tasks last.
+- **Filtering** — `pending_tasks()` and `Owner.filter_tasks()` by pet name and/or completion status.
+- **Recurrence** — completing a daily task regenerates it for the next day, weekly for +7 days, and one-off tasks do not regenerate.
+- **Conflict detection** — overlapping time slots are flagged (same pet and across pets), while spaced/touching tasks are not.
+
+Successful test run:
 
 ```
-# Paste your pytest output here
+============================= test session starts =============================
+platform win32 -- Python 3.14.5, pytest-9.1.1, pluggy-1.6.0
+rootdir: C:\Users\skkpr\Desktop\Github - codepath\ai110-module2show-pawpal-starter
+plugins: anyio-4.14.1
+collected 26 items
+
+tests\test_pawpal.py ..........................                          [100%]
+
+============================= 26 passed in 0.23s ==============================
 ```
+
+### Confidence Level
+
+**★★★★☆ (4/5)** — The core scheduling, sorting, filtering, recurrence, and conflict-detection paths are all tested with both positive and negative cases, and all 26 tests pass. Holding back one star because conflict detection currently only *reports* overlaps (the scheduler doesn't yet resolve them), and recurrence covers daily/weekly but not month-end or custom intervals. Those are the next areas I'd test and harden.
 
 ## 📐 Smarter Scheduling
 

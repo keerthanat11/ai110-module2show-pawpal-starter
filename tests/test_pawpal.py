@@ -241,6 +241,19 @@ def test_find_conflicts_flags_same_time_across_pets():
     assert "Meds" in warnings[0] and "Feed" in warnings[0]
 
 
+def test_find_conflicts_flags_same_pet_duplicate_times():
+    owner = Owner(name="J", available_minutes=120)
+    pet = Pet(name="Mochi", species="dog")
+    owner.add_pet(pet)
+    pet.add_task(CareTask("Meds", 15, Priority.HIGH, fixed_time=time(8, 0)))
+    pet.add_task(CareTask("Vet call", 15, Priority.HIGH, fixed_time=time(8, 0)))
+
+    scheduler = Scheduler(owner)
+    warnings = scheduler.find_conflicts({pet.name: scheduler.build_plan(pet)})
+    assert len(warnings) == 1
+    assert "same pet" in warnings[0]
+
+
 def test_no_conflicts_when_tasks_are_spaced():
     owner = Owner(name="J", available_minutes=120)
     pet = Pet(name="Mochi", species="dog")

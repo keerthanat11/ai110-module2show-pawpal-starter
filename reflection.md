@@ -5,7 +5,20 @@
 **a. Initial design**
 
 - Briefly describe your initial UML design.
+
+My initial UML design (see `diagrams/uml.mmd`) is a class diagram organized around three core user actions: (1) add a pet and its care tasks, (2) generate today's plan, and (3) see today's tasks and the reasoning behind them. I separated the domain model (what the data *is*) from the scheduling logic (what the system *does*), so each class has a single clear responsibility.
+
 - What classes did you include, and what responsibilities did you assign to each?
+
+- Priority:Fixed set of importance levels (`LOW`, `MEDIUM`, `HIGH`) so priority is type-safe rather than a free-form string.
+- Owner:Holds the human's info and constraints: name, wake/sleep hours, total `available_minutes`, and preferences. Owns one or more pets (`add_pet`).
+- Pet: Basic pet info (name, species, breed, age, notes) and the list of its care tasks, which it can add/remove (`add_task`, `remove_task`).
+- CareTask: A single thing to do (walk, feeding, meds, etc.): title, `duration_minutes`, `priority`, category, optional `fixed_time`, and whether it's `recurring`. Exposes `priority_weight()` so the scheduler can rank it numerically.
+- Scheduler: The "brain." Given a pet's tasks and the owner's constraints, it sorts tasks (`sort_tasks`), checks whether each fits in the remaining time (`fits`), and assembles a `DailyPlan` (`build_plan`), including a human-readable rationale (`explain`).
+- ScheduledTask: A task placed at a concrete `start_time`/`end_time`, plus the `reason` it was scheduled. Wraps a `CareTask` rather than duplicating its fields.
+- DailyPlan: The output: the day, the list of scheduled tasks, any skipped tasks, total minutes used, and an explanation. `summary()` renders it for display.
+
+Relationships: an `Owner` owns many `Pet`s; a `Pet` has many `CareTask`s; the `Scheduler` reads the `Owner`'s constraints and produces a `DailyPlan` composed of `ScheduledTask`s, each wrapping one `CareTask`.
 
 **b. Design changes**
 
